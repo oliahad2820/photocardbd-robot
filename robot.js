@@ -15,6 +15,21 @@ const SITE = 'https://photocardbd.com/';
     if (r.url().startsWith(SITE)) r.continue({ headers: Object.assign({}, r.headers(), { 'x-robot-key': key }) });
     else r.continue();
   });
+  // খবরের ছবি আসল ব্রাউজারের মতো খুলে আনা (অনেক নিউজ সাইট সার্ভার থেকে ছবি নিতে দেয় না) → data: URL
+  await p.exposeFunction('robotImage', async url => {
+    if (!/^https?:\/\//i.test(url)) return '';
+    const t = await b.newPage();
+    try {
+      await t.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36');
+      const r = await t.goto(url, { waitUntil: 'load', timeout: 30000 });
+      if (!r || !r.ok()) { console.log('image HTTP', r && r.status(), url); return ''; }
+      const ct = (r.headers()['content-type'] || '').split(';')[0];
+      if (!/^image\//.test(ct)) { console.log('not an image', ct, url); return ''; }
+      const buf = await r.buffer();
+      if (buf.length > 12 * 1024 * 1024) return '';
+      return 'data:' + ct + ';base64,' + buf.toString('base64');
+    } catch (e) { console.log('image error', e.message); return ''; } finally { await t.close(); }
+  });
   p.on('console', m => console.log(m.text()));
   p.on('pageerror', e => console.log('PAGE ERROR', e.message));
   const res = await p.goto(SITE + path + (process.env.QS ? '?' + process.env.QS : ''), { waitUntil: 'domcontentloaded', timeout: 90000 });
