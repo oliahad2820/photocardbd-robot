@@ -35,7 +35,7 @@ jobs:
         id: check
         run: |
           if [ "$TASK" = "daily" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; exit 0; fi
-          n=$(curl -s -m 30 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/site-robot.php?count=1" | sed -n 's/.*"pending":\([0-9]*\).*/\1/p')
+          n=$(curl -s -L -m 30 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/site-robot?count=1" | sed -n 's/.*"pending":\([0-9]*\).*/\1/p')
           echo "pending: ${n:-?}"
           [ "${n:-0}" != "0" ] && echo "go=1" >> "$GITHUB_OUTPUT" || true
       - name: Install puppeteer-core
