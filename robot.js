@@ -17,6 +17,7 @@ const SITE = 'https://photocardbd.com/';
   });
   // খবরের ছবি আসল ব্রাউজারের মতো খুলে আনা (অনেক নিউজ সাইট সার্ভার থেকে ছবি নিতে দেয় না) → data: URL
   await p.exposeFunction('robotImage', async url => {
+    console.log('image fetch', url);
     if (!/^https?:\/\//i.test(url)) return '';
     const t = await b.newPage();
     try {
@@ -29,6 +30,25 @@ const SITE = 'https://photocardbd.com/';
       if (buf.length > 12 * 1024 * 1024) return '';
       return 'data:' + ct + ';base64,' + buf.toString('base64');
     } catch (e) { console.log('image error', e.message); return ''; } finally { await t.close(); }
+  });
+  // ছবির ঠিকানা না থাকলে: খবরের পাতা খুলে og:image / twitter:image / প্রথম বড় ছবি
+  await p.exposeFunction('robotOgImage', async url => {
+    if (!/^https?:\/\//i.test(url)) return '';
+    const t = await b.newPage();
+    try {
+      await t.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36');
+      await t.setRequestInterception(true);
+      t.on('request', q => ['image', 'media', 'font', 'stylesheet'].includes(q.resourceType()) ? q.abort() : q.continue());
+      const r = await t.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (!r || !r.ok()) { console.log('page HTTP', r && r.status(), url); return ''; }
+      const src = await t.evaluate(() => {
+        const m = s => { const e = document.querySelector(s); return e && (e.content || e.href) || ''; };
+        return m('meta[property="og:image"]') || m('meta[name="twitter:image"]') || m('link[rel="image_src"]')
+          || ((document.querySelector('article img, .entry-content img, img.wp-post-image') || {}).src || '');
+      });
+      console.log('og image', src || '(none)', url);
+      return src;
+    } catch (e) { console.log('page error', e.message); return ''; } finally { await t.close(); }
   });
   p.on('console', m => console.log(m.text()));
   p.on('pageerror', e => console.log('PAGE ERROR', e.message));
