@@ -1,0 +1,62 @@
+# Photo Card BD robot
+#  - every 10 min: draw website (WordPress/PHP) news cards nobody's admin page picked up
+#  - 03:30 Bangladesh time: schedule customers' daily cards (prayer, weather, date, history) on their pages
+# Manual run: Actions → robot → Run workflow
+name: robot
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+    - cron: '30 21 * * *'
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "site = website news, daily = daily cards"
+        default: site
+      qs:
+        description: "extra query (daily: only=USER_ID, dry=1)"
+        default: ''
+
+concurrency:
+  group: robot-${{ github.event.schedule == '30 21 * * *' && 'daily' || inputs.task || 'site' }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DC_ROBOT_KEY: ${{ secrets.DC_ROBOT_KEY }}
+      TASK: ${{ github.event.schedule == '30 21 * * *' && 'daily' || inputs.task || 'site' }}
+      QS: ${{ inputs.qs }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Anything waiting?
+        id: check
+        run: |
+          if [ "$TASK" = "daily" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          n=$(curl -s -m 30 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/site-robot.php?count=1" | sed -n 's/.*"pending":\([0-9]*\).*/\1/p')
+          echo "pending: ${n:-?}"
+          [ "${n:-0}" != "0" ] && echo "go=1" >> "$GITHUB_OUTPUT" || true
+      - name: Install puppeteer-core
+        if: steps.check.outputs.go == '1'
+        run: npm i --no-save --silent puppeteer-core@23
+      - name: Run
+        if: steps.check.outputs.go == '1'
+        run: |
+          if [ "$TASK" = "daily" ]; then node robot.js daily-card/robot.php; else node robot.js news-card/site-robot.php; fi
+
+  # GitHub turns off schedules in repos with no activity for 60 days — touch a file monthly
+  keepalive:
+    if: github.event.schedule == '30 21 * * *'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if [ "$(date -u +%d)" = "01" ]; then
+            date -u > .keepalive
+            git config user.name "photocardbd-robot"; git config user.email "robot@users.noreply.github.com"
+            git add .keepalive && git commit -m "keepalive" && git push || true
+          fi
