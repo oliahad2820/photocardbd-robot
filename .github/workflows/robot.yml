@@ -38,7 +38,7 @@ jobs:
           # site called us the moment news arrived — give the admin page its 1-minute head start first
           case "$QS" in *kick=1*) sleep 65 ;; esac
           # auto news: collect, verify, write (returns at once when switched off in admin)
-          case "$QS" in *kick=1*) ;; *) curl -s -L -m 220 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/autonews-cron" | head -c 400; echo ;; esac
+          case "$QS" in *kick=1*) ;; *) curl -s -L -m 220 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/autonews-cron" | head -c 2500; echo ;; esac
           n=$(curl -s -L -m 30 -H "X-Robot-Key: $DC_ROBOT_KEY" -A "Mozilla/5.0 PhotoCardBD-Robot" "https://photocardbd.com/news-card/site-robot?count=1" | sed -n 's/.*"pending":\([0-9]*\).*/\1/p')
           echo "pending: ${n:-?}"
           [ "${n:-0}" != "0" ] && echo "go=1" >> "$GITHUB_OUTPUT" || true
