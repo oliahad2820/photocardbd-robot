@@ -42,9 +42,12 @@ const SITE = 'https://photocardbd.com/';
       const r = await t.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       if (!r || !r.ok()) { console.log('page HTTP', r && r.status(), url); return ''; }
       const src = await t.evaluate(() => {
-        const m = s => { const e = document.querySelector(s); return e && (e.content || e.href) || ''; };
-        return m('meta[property="og:image"]') || m('meta[name="twitter:image"]') || m('link[rel="image_src"]')
-          || ((document.querySelector('article img, .entry-content img, img.wp-post-image') || {}).src || '');
+        // একাধিক og:image থাকলে (কিছু সাইটে প্লাগইন WhatsApp-এর আইকন ঢোকায়) — সাইটের নিজের ছবি নেওয়া, .svg আইকন বাদ
+        const ok = u => u && !/\.svg(\?|$)/i.test(u);
+        const all = [...document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"], link[rel="image_src"]')].map(e => e.content || e.href || '').filter(ok);
+        const own = all.find(u => { try { return new URL(u, location.href).hostname.replace(/^www\./, '') === location.hostname.replace(/^www\./, ''); } catch (e) { return false; } });
+        const img = document.querySelector('article img, .entry-content img, img.wp-post-image');
+        return own || all[0] || (img && (img.dataset.src || img.src)) || '';
       });
       console.log('og image', src || '(none)', url);
       return src;
