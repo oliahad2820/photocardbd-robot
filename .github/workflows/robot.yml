@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "site = website news, daily = daily cards"
+        description: "site = website news, daily = daily cards, convert = video news HEVC → H.264"
         default: site
       qs:
         description: "extra query (daily: only=USER_ID, dry=1)"
@@ -22,7 +22,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ভিডিও নিউজ: ফোনে না চলা ভিডিও H.264-এ বদলানো (সাইট থেকে সঙ্গে সঙ্গে ডাকা হয়; VPS থাকলেও এটা এখানেই হয়)
+  convert:
+    if: github.event_name == 'workflow_dispatch' && inputs.task == 'convert'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DC_ROBOT_KEY: ${{ secrets.DC_ROBOT_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash convert.sh
+
   run:
+    if: github.event_name != 'workflow_dispatch' || inputs.task != 'convert'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
