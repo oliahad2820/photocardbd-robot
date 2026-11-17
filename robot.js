@@ -3,11 +3,17 @@
 // The key (secret DC_ROBOT_KEY) is sent only to photocardbd.com, never to fonts/CDNs.
 const puppeteer = require('puppeteer-core');
 const SITE = 'https://photocardbd.com/';
+// ব্রাউজার সবসময় বন্ধ — ভুল হলে বা timeout মেরে দিলে Chrome পেছনে চলতে থাকে না (পরের বার ধীর/আটকে যাওয়া রোধ)
+let BROWSER = null;
+const killBrowser = () => { try { const pr = BROWSER && BROWSER.process(); if (pr && !pr.killed) pr.kill('SIGKILL'); } catch (e) {} };
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { console.log('ROBOT STOPPED', sig); killBrowser(); process.exit(1); });
 (async () => {
   const path = process.argv[2];                 // e.g. daily-card/robot.php
   const key = process.env.DC_ROBOT_KEY;
   if (!path || !key) { console.log('missing path/key'); process.exit(1); }
-  const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--lang=bn-BD'] });
+  const b = BROWSER = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--lang=bn-BD'],
+    // waitForFunction-এর অপেক্ষা একটাই ব্রাউজার-কল — ডিফল্ট ৩ মিনিটে কেটে যেত, তাই ৩ মিনিটের বেশি লম্বা সারি মাঝপথে মরত
+    protocolTimeout: 25 * 60 * 1000 });
   const p = await b.newPage();
   // খবরের সাইটের পাতা/ছবি খোলার ট্যাব: জাভাস্ক্রিপ্ট বন্ধ (কিছু সাইটের স্ক্রিপ্ট ট্যাব জমিয়ে দেয় — bvnews24 …/PhotoGallery/,
   // তখন ট্যাব বন্ধও হয় না, পুরো সারি আটকে যায়), আর পুরো কাজ ৪৫ সেকেন্ডে শেষ না হলে ছেড়ে দেওয়া
@@ -65,4 +71,4 @@ const SITE = 'https://photocardbd.com/';
   await p.waitForFunction(() => document.body.dataset.done === '1', { timeout: 40 * 60 * 1000, polling: 2000 });
   console.log('==== DONE', JSON.stringify(await p.evaluate(() => window.ROBOT_SUMMARY)));
   await b.close();
-})().catch(e => { console.error(e); process.exit(1); });
+})().catch(e => { console.log('ROBOT ERROR', String(e && e.message || e).slice(0, 300)); killBrowser(); process.exit(1); });
